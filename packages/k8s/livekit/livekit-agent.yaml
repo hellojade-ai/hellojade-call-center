@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-agent
+  namespace: call-center
+  labels:
+    app: livekit-agent
+    app.kubernetes.io/part-of: ai-call-center
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: livekit-agent
+  template:
+    metadata:
+      labels:
+        app: livekit-agent
+    spec:
+      serviceAccountName: livekit-agent
+      terminationGracePeriodSeconds: 600
+      containers:
+        - name: agent
+          image: us-central1-docker.pkg.dev/hello-jade/call-center/agent:latest
+          ports:
+            - containerPort: 8081
+              name: health
+          env:
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-secrets
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-secrets
+                  key: LIVEKIT_API_SECRET
+            - name: LIVEKIT_URL
+              value: "ws://livekit-server.call-center.svc.cluster.local:7880"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: livekit-agent-hpa
+  namespace: call-center
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: livekit-agent
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60

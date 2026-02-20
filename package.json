@@ -1,0 +1,25 @@
+{
+  "name": "@hellojade/call-center",
+  "version": "0.0.1",
+  "description": "AI Call Center on GKE — LiveKit + NVIDIA Riva STT + Chatterbox TTS + vLLM",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "deploy:namespace": "kubectl apply -f packages/k8s/base/namespace.yaml",
+    "deploy:gateway": "kubectl apply -f packages/k8s/gateway/",
+    "deploy:livekit": "kubectl apply -f packages/k8s/livekit/",
+    "deploy:inference": "kubectl apply -f packages/k8s/inference/",
+    "deploy:all": "npm run deploy:namespace && npm run deploy:gateway && npm run deploy:livekit && npm run deploy:inference",
+    "agent:build": "gcloud builds submit packages/agent --pack image=us-central1-docker.pkg.dev/hello-jade/call-center/agent:latest --project=hello-jade",
+    "tts:build": "gcloud builds submit packages/chatterbox-tts --pack image=us-central1-docker.pkg.dev/hello-jade/call-center/chatterbox-tts:latest --project=hello-jade"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "nx": "22.5.1"
+  },
+  "nx": {
+    "includedScripts": []
+  }
+}

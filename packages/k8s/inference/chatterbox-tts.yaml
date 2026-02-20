@@ -1,0 +1,93 @@
+# Chatterbox TTS — Self-hosted text-to-speech with voice cloning
+# Requires custom Docker image (packages/chatterbox-tts/)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatterbox-tts
+  namespace: call-center
+  labels:
+    app: chatterbox-tts
+    app.kubernetes.io/component: tts
+    app.kubernetes.io/part-of: ai-call-center
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chatterbox-tts
+  template:
+    metadata:
+      labels:
+        app: chatterbox-tts
+        ai.callcenter/gpu-required: "true"
+    spec:
+      containers:
+        - name: chatterbox
+          image: us-central1-docker.pkg.dev/hello-jade/call-center/chatterbox-tts:latest
+          ports:
+            - containerPort: 8880
+              name: http
+          env:
+            - name: DEVICE
+              value: "cuda"
+            - name: VOICES_DIR
+              value: "/voices"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: voices
+              mountPath: /voices
+            - name: model-cache
+              mountPath: /root/.cache
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8880
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8880
+            initialDelaySeconds: 90
+            periodSeconds: 30
+      volumes:
+        - name: voices
+          configMap:
+            name: chatterbox-voices
+            optional: true
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: chatterbox-model-cache
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chatterbox-model-cache
+  namespace: call-center
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 15Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatterbox-tts
+  namespace: call-center
+spec:
+  selector:
+    app: chatterbox-tts
+  ports:
+    - name: http
+      port: 8880
+      targetPort: 8880

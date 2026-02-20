@@ -1,0 +1,42 @@
+# STUNner Gateway for WebRTC media relay
+# Prerequisite: Install stunner-gateway-operator in stunner-system namespace
+# helm repo add stunner https://l7mp.io/stunner
+# helm install stunner stunner/stunner --namespace stunner-system --create-namespace
+---
+apiVersion: stunner.l7mp.io/v1
+kind: GatewayConfig
+metadata:
+  name: stunner-gatewayconfig
+  namespace: call-center
+spec:
+  realm: call-center.hellojade.ai
+  authType: plaintext
+  userName: "call-center-user"
+  password: "REPLACE_ME_WITH_STRONG_PASSWORD"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: stunner-media-gateway
+  namespace: call-center
+  annotations:
+    stunner.l7mp.io/related-gateway-config: stunner-gatewayconfig
+spec:
+  gatewayClassName: stunner-gatewayclass
+  listeners:
+    - name: udp-listener
+      port: 3478
+      protocol: TURN-UDP
+---
+apiVersion: stunner.l7mp.io/v1
+kind: UDPRoute
+metadata:
+  name: livekit-media-route
+  namespace: call-center
+spec:
+  parentRefs:
+    - name: stunner-media-gateway
+  rules:
+    - backendRefs:
+        - name: livekit-server
+          namespace: call-center

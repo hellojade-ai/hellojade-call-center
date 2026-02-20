@@ -1,0 +1,6 @@
+livekit-agents>=1.4.2
+livekit-plugins-openai>=1.0.0
+livekit-plugins-nvidia>=1.0.0
+livekit-plugins-silero>=1.0.0
+livekit-plugins-turn-detector>=1.0.0
+livekit-plugins-noise-cancellation>=1.0.0

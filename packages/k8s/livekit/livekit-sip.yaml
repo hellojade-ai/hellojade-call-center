@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-sip
+  namespace: call-center
+  labels:
+    app: livekit-sip
+    app.kubernetes.io/part-of: ai-call-center
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: livekit-sip
+  template:
+    metadata:
+      labels:
+        app: livekit-sip
+    spec:
+      containers:
+        - name: sip
+          image: livekit/sip:latest
+          ports:
+            - containerPort: 5060
+              protocol: UDP
+              name: sip-udp
+            - containerPort: 5060
+              protocol: TCP
+              name: sip-tcp
+          env:
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-secrets
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-secrets
+                  key: LIVEKIT_API_SECRET
+            - name: LIVEKIT_URL
+              value: "ws://livekit-server.call-center.svc.cluster.local:7880"
+            - name: SIP_REDIS_ADDRESS
+              value: "redis.call-center.svc.cluster.local:6379"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+---
+# Separate LoadBalancer for SIP traffic (Twilio sends SIP here)
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-sip
+  namespace: call-center
+  annotations:
+    # Request a static IP for Twilio SIP trunk configuration
+    # After deploy: note the external IP and configure in Twilio
+    cloud.google.com/l4-rbs: "enabled"
+spec:
+  type: LoadBalancer
+  selector:
+    app: livekit-sip
+  ports:
+    - name: sip-udp
+      port: 5060
+      targetPort: 5060
+      protocol: UDP
+    - name: sip-tcp
+      port: 5060
+      targetPort: 5060
+      protocol: TCP

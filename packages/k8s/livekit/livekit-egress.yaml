@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-egress
+  namespace: call-center
+  labels:
+    app: livekit-egress
+    app.kubernetes.io/part-of: ai-call-center
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: livekit-egress
+  template:
+    metadata:
+      labels:
+        app: livekit-egress
+    spec:
+      serviceAccountName: livekit-egress
+      containers:
+        - name: egress
+          image: livekit/egress:latest
+          env:
+            - name: EGRESS_CONFIG_BODY
+              value: |
+                api_key: INJECTED_VIA_SECRET
+                api_secret: INJECTED_VIA_SECRET
+                ws_url: ws://livekit-server.call-center.svc.cluster.local:7880
+                redis:
+                  address: redis.call-center.svc.cluster.local:6379
+                gcp:
+                  bucket: call-center-recordings-hellojade
+                  credentials_json: ""
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-secrets
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: livekit-secrets
+                  key: LIVEKIT_API_SECRET
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-egress
+  namespace: call-center
+spec:
+  selector:
+    app: livekit-egress
+  ports:
+    - port: 7880
+      targetPort: 7880

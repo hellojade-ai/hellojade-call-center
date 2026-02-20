@@ -1,0 +1,59 @@
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: livekit-gateway
+  namespace: call-center
+  annotations:
+    networking.gke.io/certmap: calls-hellojade-ai-cert-map
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  addresses:
+    - type: NamedAddress
+      value: calls-hellojade-ai-ip
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+    - name: http
+      protocol: HTTP
+      port: 80
+---
+kind: HTTPRoute
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: livekit-http-redirect
+  namespace: call-center
+spec:
+  parentRefs:
+    - kind: Gateway
+      name: livekit-gateway
+      sectionName: http
+  hostnames:
+    - calls.hellojade.ai
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+---
+kind: HTTPRoute
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: livekit-https-route
+  namespace: call-center
+spec:
+  parentRefs:
+    - kind: Gateway
+      name: livekit-gateway
+      sectionName: https
+  hostnames:
+    - calls.hellojade.ai
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: livekit-server
+          port: 7880

@@ -1,0 +1,113 @@
+# NVIDIA Riva Speech-to-Text (self-hosted on L4 GPU)
+# Uses riva-speech-server with model init container
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: riva-stt
+  namespace: call-center
+  labels:
+    app: riva-stt
+    app.kubernetes.io/component: stt
+    app.kubernetes.io/part-of: ai-call-center
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: riva-stt
+  template:
+    metadata:
+      labels:
+        app: riva-stt
+        ai.callcenter/gpu-required: "true"
+    spec:
+      # Init container downloads Riva ASR models to shared volume
+      initContainers:
+        - name: riva-model-init
+          image: nvcr.io/nvidia/riva/riva-speech:2.17.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # Download English ASR models if not already cached
+              if [ ! -d "/models/models" ]; then
+                echo "Downloading Riva ASR models..."
+                riva-build speech_recognition \
+                  /models/models/asr_conformer_en_US.rmir \
+                  /models/models/asr_conformer_en_US.riva \
+                  --decoder_type=ctc \
+                  --language_code=en-US
+              else
+                echo "Models already cached, skipping download."
+              fi
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+          resources:
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+      containers:
+        - name: riva-speech
+          image: nvcr.io/nvidia/riva/riva-speech:2.17.0
+          ports:
+            - containerPort: 50051
+              name: grpc
+            - containerPort: 8000
+              name: http
+          env:
+            - name: RIVA_SPEECH_API_PORT
+              value: "50051"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+          readinessProbe:
+            exec:
+              command: ["grpc_health_probe", "-addr=:50051"]
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["grpc_health_probe", "-addr=:50051"]
+            initialDelaySeconds: 120
+            periodSeconds: 30
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: riva-model-cache
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: riva-model-cache
+  namespace: call-center
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-rwo
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: riva-stt
+  namespace: call-center
+spec:
+  selector:
+    app: riva-stt
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+    - name: http
+      port: 8000
+      targetPort: 8000
